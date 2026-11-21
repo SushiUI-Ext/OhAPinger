@@ -1,11 +1,14 @@
 #include <iostream>
 #include <string>
 #include <cstdio>
+#include <cctype>
 #include <array>
 #include <vector>
 #include <algorithm>
 
 using namespace std;
+
+static const string VERSION = "1.0.0-sushiui";
 
 string exec(const string& cmd) {
     array<char, 256> buffer;
@@ -28,6 +31,26 @@ string pingCommand(const string& host) {
 #else
     return "ping -c 1 " + host + " 2>&1";
 #endif
+}
+
+bool readLine(const string& prompt, string& out) {
+    cout << prompt;
+    if (!getline(cin, out)) return false;
+
+    size_t first = out.find_first_not_of(" \t\r\n");
+    size_t last = out.find_last_not_of(" \t\r\n");
+    out = (first == string::npos) ? "" : out.substr(first, last - first + 1);
+    return true;
+}
+
+bool validHost(const string& host) {
+    if (host.empty() || host.size() > 253 || host[0] == '-') return false;
+
+    for (unsigned char c : host) {
+        if (!isalnum(c) && c != '.' && c != '-' && c != ':') return false;
+    }
+
+    return true;
 }
 
 bool isLiveMode(const string& input) {
@@ -58,7 +81,7 @@ string extractTime(const string& output) {
     string ms;
 
     while (pos < output.size() &&
-          (isdigit(output[pos]) || output[pos] == '.' || output[pos] == '<')) {
+          (isdigit((unsigned char)output[pos]) || output[pos] == '.' || output[pos] == '<')) {
 
         if (output[pos] != '<')
             ms += output[pos];
@@ -121,19 +144,26 @@ void liveMode(const string& host) {
             }
         }
 
-        // stats leves a cada 20 pings
         if (count % 20 == 0) {
             showStats(times, count, failed);
         }
     }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc > 1) {
+        string arg = argv[1];
+        if (arg == "--version" || arg == "-v") {
+            cout << "OhAPinger " << VERSION << "\n";
+            return 0;
+        }
+    }
 
     while (true) {
 
         cout << "=====================================\n";
         cout << "        Welcome to OhAPinger!        \n";
+        cout << "        Version " << VERSION << "\n";
         cout << " OSS project made by bangkkuser      \n";
         cout << " GitHub: rebangkkuser                \n";
         cout << " If you want a live ping, type \"live\" in the test quantity.\n";
@@ -142,15 +172,18 @@ int main() {
         string host;
         string inputTests;
 
-        cout << "Enter host/IP: ";
-        cin >> host;
+        if (!readLine("Enter host/IP: ", host)) break;
 
-        cout << "Number of tests (or 'live'): ";
-        cin >> inputTests;
+        if (!validHost(host)) {
+            cout << "Invalid host.\n\n";
+            continue;
+        }
+
+        if (!readLine("Number of tests (or 'live'): ", inputTests)) break;
 
         if (isLiveMode(inputTests)) {
             if (!hostResponded(host)) {
-                cout << "The host did not respond.\n";
+                cout << "The host did not respond.\n\n";
                 continue;
             }
 
@@ -160,12 +193,17 @@ int main() {
             continue;
         }
 
-        int tests;
+        int tests = 0;
+        size_t parsed = 0;
 
         try {
-            tests = stoi(inputTests);
+            tests = stoi(inputTests, &parsed);
         } catch (...) {
-            cout << "Invalid input.\n";
+            parsed = 0;
+        }
+
+        if (parsed != inputTests.size() || tests < 1) {
+            cout << "Invalid input.\n\n";
             continue;
         }
 
@@ -175,7 +213,7 @@ int main() {
         cout << "\nChecking host...\n";
 
         if (!hostResponded(host)) {
-            cout << "The host did not respond.\n";
+            cout << "The host did not respond.\n\n";
             continue;
         }
 
@@ -205,11 +243,10 @@ int main() {
 
         showStats(times, tests, failed);
 
-        char again;
-        cout << "\nDo you want to start a new test? [y/n]: ";
-        cin >> again;
+        string again;
 
-        if (again != 'y' && again != 'Y') {
+        if (!readLine("\nDo you want to start a new test? [y/n]: ", again) ||
+            (again != "y" && again != "Y")) {
             cout << "Exiting OhAPinger...\n";
             break;
         }
@@ -219,3 +256,4 @@ int main() {
 
     return 0;
 }
+
